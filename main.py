@@ -123,7 +123,7 @@ def ui():
                 </label>
 
                 <input id="fileInput" type="file" accept="image/*"
-                       onchange="handleFileSelect()" style="display:none;">
+       onchange="handleFileSelect()" style="display:none;">
 
                 <img id="preview" style="display:none; max-width:100%; margin-top:10px;" />
 
