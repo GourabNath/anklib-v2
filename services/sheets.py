@@ -118,9 +118,9 @@ def save_to_sheets(data: dict):
                         "blue": 1
                     },
                     "secondBandColor": {
-                        "red": 0.95,
-                        "green": 0.95,
-                        "blue": 0.95
+                        "red": 0.85,
+                        "green": 0.92,
+                        "blue": 1
                     }
                 }
             }
