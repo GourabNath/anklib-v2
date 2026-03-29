@@ -15,7 +15,7 @@ def home():
 
 
 # -------------------------------
-# 🔹 SINGLE IMAGE (unchanged)
+# SINGLE IMAGE
 # -------------------------------
 @app.post("/anklib/extract")
 async def extract(file: UploadFile = File(...)):
@@ -31,7 +31,7 @@ async def extract(file: UploadFile = File(...)):
 
 
 # -------------------------------
-# 🔥 MULTI IMAGE
+# MULTI IMAGE
 # -------------------------------
 def merge_metadata(results):
     final = {}
@@ -72,7 +72,7 @@ async def extract_multiple(files: List[UploadFile] = File(...)):
 
 
 # -------------------------------
-# ✅ CONFIRM
+# CONFIRM
 # -------------------------------
 @app.post("/anklib/confirm")
 async def confirm(request: Request):
@@ -82,7 +82,7 @@ async def confirm(request: Request):
 
 
 # -------------------------------
-# 🎨 UI (MULTI CAPTURE FIXED)
+# UI
 # -------------------------------
 @app.get("/", response_class=HTMLResponse)
 def ui():
@@ -190,6 +190,11 @@ def ui():
             <button id="confirmBtn" onclick="confirmData()" style="display:none;">
                 Confirm & Save
             </button>
+
+            <!-- ✅ NEW RESET BUTTON -->
+            <button id="resetBtn" onclick="resetApp()" style="display:none; background:#777;">
+                🔄 Scan Next Book
+            </button>
         </div>
 
         <script>
@@ -225,7 +230,6 @@ def ui():
 
                     capturedImages.push(file);
                     renderPreview();
-
                 });
             }
 
@@ -296,6 +300,9 @@ def ui():
 
                 document.getElementById("resultBox").innerHTML = html;
                 document.getElementById("confirmBtn").style.display = "block";
+
+                // ✅ SHOW RESET BUTTON
+                document.getElementById("resetBtn").style.display = "block";
             }
 
             function collectData() {
@@ -324,6 +331,20 @@ def ui():
                 });
 
                 alert("✅ Saved successfully!");
+            }
+
+            // ✅ NEW RESET FUNCTION
+            function resetApp() {
+
+                capturedImages = [];
+
+                document.getElementById("previewContainer").innerHTML = "";
+                document.getElementById("resultBox").innerHTML = "";
+
+                document.getElementById("confirmBtn").style.display = "none";
+                document.getElementById("resetBtn").style.display = "none";
+
+                document.getElementById("fileInput").value = "";
             }
 
         </script>
