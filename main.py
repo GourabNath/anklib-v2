@@ -49,6 +49,8 @@ async def confirm(request: Request):
     return {"status": "saved"}
 
 
+# (only UI part shown below — rest of your backend stays SAME)
+
 @app.get("/", response_class=HTMLResponse)
 def ui():
     return """
@@ -118,12 +120,23 @@ def ui():
             <div class="container">
                 <h2>📚 Anklib</h2>
 
+                <!-- 📸 CAMERA BUTTON -->
+                <button onclick="startCamera()">📸 Open Camera</button>
+
+                <video id="camera" autoplay playsinline style="display:none; width:100%; margin-top:10px;"></video>
+                <canvas id="canvas" style="display:none;"></canvas>
+
+                <button id="captureBtn" onclick="capturePhoto()" style="display:none;">
+                    Capture Photo
+                </button>
+
+                <!-- 📁 UPLOAD OPTION -->
                 <label for="fileInput" class="upload-btn">
-                    📸 Upload Image
+                    📁 Upload Image
                 </label>
 
                 <input id="fileInput" type="file" accept="image/*"
-       onchange="handleFileSelect()" style="display:none;">
+                       onchange="handleFileSelect()" style="display:none;">
 
                 <img id="preview" style="display:none; max-width:100%; margin-top:10px;" />
 
@@ -137,6 +150,58 @@ def ui():
             </div>
 
             <script>
+
+                let stream;
+
+                async function startCamera() {
+                    const video = document.getElementById("camera");
+                    const captureBtn = document.getElementById("captureBtn");
+
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: "environment" }
+                    });
+
+                    video.srcObject = stream;
+                    video.style.display = "block";
+                    captureBtn.style.display = "block";
+                }
+
+                function capturePhoto() {
+                    const video = document.getElementById("camera");
+                    const canvas = document.getElementById("canvas");
+
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(video, 0, 0);
+
+                    canvas.toBlob(async function(blob) {
+                        const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+
+                        const formData = new FormData();
+                        formData.append("file", file);
+
+                        const res = await fetch("/anklib/extract", {
+                            method: "POST",
+                            body: formData
+                        });
+
+                        const data = await res.json();
+                        const book = data.data;
+
+                        stopCamera();
+                        displayResult(book);
+                    });
+                }
+
+                function stopCamera() {
+                    if (stream) {
+                        stream.getTracks().forEach(track => track.stop());
+                    }
+                    document.getElementById("camera").style.display = "none";
+                    document.getElementById("captureBtn").style.display = "none";
+                }
 
                 function handleFileSelect() {
                     const file = document.getElementById('fileInput').files[0];
@@ -166,7 +231,10 @@ def ui():
                     });
 
                     const data = await res.json();
-                    const book = data.data;
+                    displayResult(data.data);
+                }
+
+                function displayResult(book) {
 
                     function field(label, value) {
                         return `
@@ -185,8 +253,6 @@ def ui():
                     html += field("ISBN", book.isbn);
                     html += field("Edition", book.edition);
                     html += field("Price", book.price);
-
-                    // 🆕 NEW FIELDS
                     html += field("Accession Number", book.accession_number);
                     html += field("Number of Pages", book.number_of_pages);
 
@@ -202,8 +268,6 @@ def ui():
                         isbn: document.getElementById("ISBN")?.value,
                         edition: document.getElementById("Edition")?.value,
                         price: document.getElementById("Price")?.value,
-
-                        // 🆕 NEW FIELDS
                         accession_number: document.getElementById("Accession Number")?.value,
                         number_of_pages: document.getElementById("Number of Pages")?.value
                     };
