@@ -191,7 +191,6 @@ def ui():
                 Confirm & Save
             </button>
 
-            <!-- ✅ NEW RESET BUTTON -->
             <button id="resetBtn" onclick="resetApp()" style="display:none; background:#777;">
                 🔄 Scan Next Book
             </button>
@@ -227,7 +226,6 @@ def ui():
 
                 canvas.toBlob(function(blob) {
                     const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-
                     capturedImages.push(file);
                     renderPreview();
                 });
@@ -247,11 +245,42 @@ def ui():
                 const container = document.getElementById('previewContainer');
                 container.innerHTML = "";
 
-                capturedImages.forEach(file => {
+                capturedImages.forEach((file, index) => {
+
+                    const wrapper = document.createElement("div");
+                    wrapper.style.position = "relative";
+
                     const img = document.createElement("img");
                     img.src = URL.createObjectURL(file);
-                    container.appendChild(img);
+
+                    const removeBtn = document.createElement("div");
+                    removeBtn.innerHTML = "✕";
+                    removeBtn.style.position = "absolute";
+                    removeBtn.style.top = "4px";
+                    removeBtn.style.right = "6px";
+                    removeBtn.style.background = "rgba(0,0,0,0.6)";
+                    removeBtn.style.color = "white";
+                    removeBtn.style.borderRadius = "50%";
+                    removeBtn.style.width = "20px";
+                    removeBtn.style.height = "20px";
+                    removeBtn.style.fontSize = "12px";
+                    removeBtn.style.display = "flex";
+                    removeBtn.style.alignItems = "center";
+                    removeBtn.style.justifyContent = "center";
+                    removeBtn.style.cursor = "pointer";
+
+                    removeBtn.onclick = () => removeImage(index);
+
+                    wrapper.appendChild(img);
+                    wrapper.appendChild(removeBtn);
+
+                    container.appendChild(wrapper);
                 });
+            }
+
+            function removeImage(index) {
+                capturedImages.splice(index, 1);
+                renderPreview();
             }
 
             async function uploadAll() {
@@ -300,8 +329,6 @@ def ui():
 
                 document.getElementById("resultBox").innerHTML = html;
                 document.getElementById("confirmBtn").style.display = "block";
-
-                // ✅ SHOW RESET BUTTON
                 document.getElementById("resetBtn").style.display = "block";
             }
 
@@ -333,7 +360,6 @@ def ui():
                 alert("✅ Saved successfully!");
             }
 
-            // ✅ NEW RESET FUNCTION
             function resetApp() {
 
                 capturedImages = [];
