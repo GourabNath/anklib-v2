@@ -1,5 +1,7 @@
 from fastapi import FastAPI, File, UploadFile, Request
 from fastapi.responses import HTMLResponse
+from typing import List
+
 from services.extractor import extract_book_metadata
 from utils.image import encode_image
 from services.sheets import save_to_sheets
@@ -13,6 +15,9 @@ def home():
     return {"message": "Welcome to Anklib API"}
 
 
+# -------------------------------
+# 🔹 SINGLE IMAGE (existing)
+# -------------------------------
 @app.post("/anklib/extract")
 async def extract(file: UploadFile = File(...)):
 
@@ -36,21 +41,76 @@ async def extract(file: UploadFile = File(...)):
         }
 
 
-# ✅ SINGLE confirm endpoint (removed duplicate)
+# -------------------------------
+# 🔥 NEW: MULTI-IMAGE EXTRACTION
+# -------------------------------
+def merge_metadata(results):
+    """
+    Merge metadata from multiple images.
+    Strategy: first non-empty value wins.
+    """
+
+    final = {}
+
+    for res in results:
+        for key, value in res.items():
+            if key not in final or not final[key]:
+                final[key] = value
+
+    return final
+
+
+@app.post("/anklib/extract-multiple")
+async def extract_multiple(files: List[UploadFile] = File(...)):
+
+    try:
+        results = []
+
+        for file in files:
+            if not file.content_type.startswith("image/"):
+                continue
+
+            content = await file.read()
+            image_b64 = encode_image(content)
+
+            result = extract_book_metadata(image_b64)
+            results.append(result)
+
+        if not results:
+            return {"status": "error", "message": "No valid images uploaded"}
+
+        merged = merge_metadata(results)
+
+        return {
+            "status": "success",
+            "data": merged,
+            "images_processed": len(results)
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+# -------------------------------
+# ✅ CONFIRM (unchanged)
+# -------------------------------
 @app.post("/anklib/confirm")
 async def confirm(request: Request):
     """
     Receives user-edited metadata and saves it to Google Sheets.
     """
     data = await request.json()
-
     save_to_sheets(data)
 
     return {"status": "saved"}
 
 
-# (only UI part shown below — rest of your backend stays SAME)
-
+# -------------------------------
+# 🎨 UI (UPDATED for multi-upload)
+# -------------------------------
 @app.get("/", response_class=HTMLResponse)
 def ui():
     return """
@@ -120,7 +180,7 @@ def ui():
             <div class="container">
                 <h2>📚 Anklib</h2>
 
-                <!-- 📸 CAMERA BUTTON -->
+                <!-- 📸 CAMERA -->
                 <button onclick="startCamera()">📸 Open Camera</button>
 
                 <video id="camera" autoplay playsinline style="display:none; width:100%; margin-top:10px;"></video>
@@ -130,15 +190,15 @@ def ui():
                     Capture Photo
                 </button>
 
-                <!-- 📁 UPLOAD OPTION -->
+                <!-- 📁 MULTI UPLOAD -->
                 <label for="fileInput" class="upload-btn">
-                    📁 Upload Image
+                    📁 Upload Images (Multiple)
                 </label>
 
-                <input id="fileInput" type="file" accept="image/*"
+                <input id="fileInput" type="file" accept="image/*" multiple
                        onchange="handleFileSelect()" style="display:none;">
 
-                <img id="preview" style="display:none; max-width:100%; margin-top:10px;" />
+                <div id="previewContainer"></div>
 
                 <button id="extractBtn" onclick="uploadFile()">Extract Metadata</button>
 
@@ -188,10 +248,9 @@ def ui():
                         });
 
                         const data = await res.json();
-                        const book = data.data;
+                        displayResult(data.data);
 
                         stopCamera();
-                        displayResult(book);
                     });
                 }
 
@@ -204,28 +263,35 @@ def ui():
                 }
 
                 function handleFileSelect() {
-                    const file = document.getElementById('fileInput').files[0];
-                    const preview = document.getElementById('preview');
+                    const files = document.getElementById('fileInput').files;
+                    const container = document.getElementById('previewContainer');
+                    container.innerHTML = "";
 
-                    if (file) {
-                        preview.src = URL.createObjectURL(file);
-                        preview.style.display = "block";
+                    for (let i = 0; i < files.length; i++) {
+                        const img = document.createElement("img");
+                        img.src = URL.createObjectURL(files[i]);
+                        img.style.maxWidth = "100px";
+                        img.style.margin = "5px";
+                        container.appendChild(img);
                     }
                 }
 
                 async function uploadFile() {
 
-                    const file = document.getElementById('fileInput').files[0];
+                    const files = document.getElementById('fileInput').files;
 
-                    if (!file) {
-                        alert("Select a file");
+                    if (!files.length) {
+                        alert("Select at least one image");
                         return;
                     }
 
                     const formData = new FormData();
-                    formData.append("file", file);
 
-                    const res = await fetch("/anklib/extract", {
+                    for (let i = 0; i < files.length; i++) {
+                        formData.append("files", files[i]);
+                    }
+
+                    const res = await fetch("/anklib/extract-multiple", {
                         method: "POST",
                         body: formData
                     });
