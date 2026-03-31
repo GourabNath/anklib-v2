@@ -1,12 +1,28 @@
 from fastapi import FastAPI, File, UploadFile, Request
 from fastapi.responses import HTMLResponse
 from typing import List
+import hashlib  # ✅ NEW: for image hashing
 
 from services.extractor import extract_book_metadata
 from utils.image import encode_image
 from services.sheets import save_to_sheets
 
 app = FastAPI()
+
+# --------------------------------------------------
+# ✅ NEW: In-memory cache for image-level results
+# Key   = image hash
+# Value = extracted metadata
+# --------------------------------------------------
+IMAGE_CACHE = {}
+
+
+def get_image_hash(content: bytes) -> str:
+    """
+    Generate a unique hash for an image.
+    Used to identify duplicate images across uploads.
+    """
+    return hashlib.md5(content).hexdigest()
 
 
 @app.get("/anklib")
@@ -34,6 +50,10 @@ async def extract(file: UploadFile = File(...)):
 # MULTI IMAGE
 # -------------------------------
 def merge_metadata(results):
+    """
+    Merge metadata from multiple images.
+    Strategy: first non-empty value wins.
+    """
     final = {}
 
     for res in results:
@@ -48,15 +68,29 @@ def merge_metadata(results):
 async def extract_multiple(files: List[UploadFile] = File(...)):
 
     results = []
+    reused_count = 0  # ✅ Track cache hits
 
     for file in files:
         if not file.content_type.startswith("image/"):
             continue
 
         content = await file.read()
-        image_b64 = encode_image(content)
 
-        result = extract_book_metadata(image_b64)
+        # ✅ Step 1: Generate hash for the image
+        image_hash = get_image_hash(content)
+
+        # ✅ Step 2: Check cache
+        if image_hash in IMAGE_CACHE:
+            result = IMAGE_CACHE[image_hash]
+            reused_count += 1
+        else:
+            # ✅ Step 3: Run extraction only if not cached
+            image_b64 = encode_image(content)
+            result = extract_book_metadata(image_b64)
+
+            # ✅ Step 4: Store in cache
+            IMAGE_CACHE[image_hash] = result
+
         results.append(result)
 
     if not results:
@@ -67,8 +101,10 @@ async def extract_multiple(files: List[UploadFile] = File(...)):
     return {
         "status": "success",
         "data": merged,
-        "images_processed": len(results)
+        "images_processed": len(results),
+        "images_reused": reused_count  # ✅ helpful for debugging / UX later
     }
+
 
 
 # -------------------------------
