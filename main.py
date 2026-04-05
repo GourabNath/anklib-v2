@@ -10,18 +10,12 @@ from services.sheets import save_to_sheets
 app = FastAPI()
 
 # --------------------------------------------------
-# ✅ NEW: In-memory cache for image-level results
-# Key   = image hash
-# Value = extracted metadata
+# ✅ In-memory cache
 # --------------------------------------------------
 IMAGE_CACHE = {}
 
 
 def get_image_hash(content: bytes) -> str:
-    """
-    Generate a unique hash for an image.
-    Used to identify duplicate images across uploads.
-    """
     return hashlib.md5(content).hexdigest()
 
 
@@ -50,10 +44,6 @@ async def extract(file: UploadFile = File(...)):
 # MULTI IMAGE
 # -------------------------------
 def merge_metadata(results):
-    """
-    Merge metadata from multiple images.
-    Strategy: first non-empty value wins.
-    """
     final = {}
 
     for res in results:
@@ -68,27 +58,21 @@ def merge_metadata(results):
 async def extract_multiple(files: List[UploadFile] = File(...)):
 
     results = []
-    reused_count = 0  # ✅ Track cache hits
+    reused_count = 0
 
     for file in files:
         if not file.content_type.startswith("image/"):
             continue
 
         content = await file.read()
-
-        # ✅ Step 1: Generate hash for the image
         image_hash = get_image_hash(content)
 
-        # ✅ Step 2: Check cache
         if image_hash in IMAGE_CACHE:
             result = IMAGE_CACHE[image_hash]
             reused_count += 1
         else:
-            # ✅ Step 3: Run extraction only if not cached
             image_b64 = encode_image(content)
             result = extract_book_metadata(image_b64)
-
-            # ✅ Step 4: Store in cache
             IMAGE_CACHE[image_hash] = result
 
         results.append(result)
@@ -102,9 +86,8 @@ async def extract_multiple(files: List[UploadFile] = File(...)):
         "status": "success",
         "data": merged,
         "images_processed": len(results),
-        "images_reused": reused_count  # ✅ helpful for debugging / UX later
+        "images_reused": reused_count
     }
-
 
 
 # -------------------------------
@@ -194,6 +177,12 @@ def ui():
                 font-size: 12px;
                 color: #777;
             }
+
+            #statusBox {
+                margin-top: 15px;
+                font-size: 14px;
+                color: #555;
+            }
         </style>
     </head>
 
@@ -220,6 +209,9 @@ def ui():
             <div id="previewContainer"></div>
 
             <button onclick="uploadAll()">Extract Metadata</button>
+
+            <!-- ✅ NEW STATUS BOX -->
+            <div id="statusBox"></div>
 
             <div id="resultBox" style="margin-top:20px;"></div>
 
@@ -300,6 +292,7 @@ def ui():
                     removeBtn.style.width = "20px";
                     removeBtn.style.height = "20px";
                     removeBtn.style.fontSize = "12px";
+
                     removeBtn.style.display = "flex";
                     removeBtn.style.alignItems = "center";
                     removeBtn.style.justifyContent = "center";
@@ -338,6 +331,22 @@ def ui():
                 });
 
                 const data = await res.json();
+
+                // ✅ NEW: show cache insight
+                const reused = data.images_reused || 0;
+                const total = data.images_processed || 0;
+                const newProcessed = total - reused;
+
+                let message = "";
+
+                if (reused > 0) {
+                    message = `⚡ Reused ${reused} image(s), processed ${newProcessed} new image(s)`;
+                } else {
+                    message = `Processed ${total} image(s)`;
+                }
+
+                document.getElementById("statusBox").innerText = message;
+
                 displayResult(data.data);
             }
 
@@ -402,6 +411,7 @@ def ui():
 
                 document.getElementById("previewContainer").innerHTML = "";
                 document.getElementById("resultBox").innerHTML = "";
+                document.getElementById("statusBox").innerText = "";
 
                 document.getElementById("confirmBtn").style.display = "none";
                 document.getElementById("resetBtn").style.display = "none";
