@@ -112,77 +112,16 @@ def ui():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
         <style>
-            body {
-                font-family: Arial;
-                background: #f5f5f5;
-                text-align: center;
-                padding: 20px;
-            }
-
-            .container {
-                background: white;
-                padding: 25px;
-                border-radius: 12px;
-                max-width: 500px;
-                margin: auto;
-            }
-
-            button {
-                background: #4CAF50;
-                color: white;
-                padding: 14px;
-                border: none;
-                border-radius: 8px;
-                width: 100%;
-                margin-top: 10px;
-                cursor: pointer;
-            }
-
-            .upload-btn {
-                display: block;
-                background: #2196F3;
-                color: white;
-                padding: 14px;
-                border-radius: 8px;
-                cursor: pointer;
-                margin-top: 10px;
-            }
-
-            #previewContainer {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 8px;
-                margin-top: 10px;
-            }
-
-            #previewContainer img {
-                width: 100%;
-                border-radius: 6px;
-            }
-
-            input {
-                width: 100%;
-                padding: 8px;
-                margin-top: 5px;
-                border-radius: 6px;
-                border: 1px solid #ccc;
-            }
-
-            .field-block {
-                margin-bottom: 15px;
-                text-align: left;
-            }
-
-            .field-label {
-                font-size: 12px;
-                color: #777;
-            }
-
-            #statusBox {
-                margin-top: 15px;
-                font-size: 14px;
-                color: #555;
-            }
+            body { font-family: Arial; background: #f5f5f5; text-align: center; padding: 20px; }
+            .container { background: white; padding: 25px; border-radius: 12px; max-width: 500px; margin: auto; }
+            button { background: #4CAF50; color: white; padding: 14px; border: none; border-radius: 8px; width: 100%; margin-top: 10px; cursor: pointer; }
+            .upload-btn { display: block; background: #2196F3; color: white; padding: 14px; border-radius: 8px; cursor: pointer; margin-top: 10px; }
+            #previewContainer { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+            #previewContainer img { width: 100%; border-radius: 6px; }
+            input { width: 100%; padding: 8px; margin-top: 5px; border-radius: 6px; border: 1px solid #ccc; }
+            .field-block { margin-bottom: 15px; text-align: left; }
+            .field-label { font-size: 12px; color: #777; }
+            #statusBox { margin-top: 15px; font-size: 14px; color: #555; }
         </style>
     </head>
 
@@ -199,255 +138,177 @@ def ui():
                 Capture Photo
             </button>
 
-            <label for="fileInput" class="upload-btn">
-                📁 Upload Images
-            </label>
-
-            <input id="fileInput" type="file" accept="image/*" multiple
-                   onchange="handleFileSelect()" style="display:none;">
+            <label for="fileInput" class="upload-btn">📁 Upload Images</label>
+            <input id="fileInput" type="file" accept="image/*" multiple onchange="handleFileSelect()" style="display:none;">
 
             <div id="previewContainer"></div>
 
             <button onclick="uploadAll()">Extract Metadata</button>
 
-            <!-- ✅ NEW STATUS BOX -->
             <div id="statusBox"></div>
+
+            <!-- ✅ Progress Bar -->
+            <div id="progressContainer" style="display:none; margin-top:10px;">
+                <div style="width:100%; background:#ddd; border-radius:6px;">
+                    <div id="progressBar" style="width:0%; height:10px; background:#4CAF50; border-radius:6px;"></div>
+                </div>
+            </div>
 
             <div id="resultBox" style="margin-top:20px;"></div>
 
-            <button id="confirmBtn" onclick="confirmData()" style="display:none;">
-                Confirm & Save
-            </button>
-
-            <button id="resetBtn" onclick="resetApp()" style="display:none; background:#777;">
-                🔄 Scan Next Book
-            </button>
+            <button id="confirmBtn" onclick="confirmData()" style="display:none;">Confirm & Save</button>
+            <button id="resetBtn" onclick="resetApp()" style="display:none; background:#777;">🔄 Scan Next Book</button>
         </div>
 
         <script>
+            let stream = null;
+            let capturedImages = [];
+            let progressInterval;
 
-    let stream = null;
-    let capturedImages = [];
+            function stopCamera() {
+                const video = document.getElementById("camera");
+                const captureBtn = document.getElementById("captureBtn");
 
-    async function startCamera() {
-        const video = document.getElementById("camera");
-        const captureBtn = document.getElementById("captureBtn");
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                }
 
-        // ✅ Stop existing stream before starting new one
-        stopCamera();
+                video.srcObject = null;
+                video.style.display = "none";
+                captureBtn.style.display = "none";
+            }
 
-        stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment" }
-        });
+            async function startCamera() {
+                stopCamera();
 
-        video.srcObject = stream;
-        video.style.display = "block";
-        captureBtn.style.display = "block";
-    }
+                const video = document.getElementById("camera");
+                const captureBtn = document.getElementById("captureBtn");
 
-    // ✅ NEW: Stop camera function
-    function stopCamera() {
-        const video = document.getElementById("camera");
-        const captureBtn = document.getElementById("captureBtn");
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }
+                });
 
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-            stream = null;
-        }
+                video.srcObject = stream;
+                video.style.display = "block";
+                captureBtn.style.display = "block";
+            }
 
-        // Hide UI
-        video.srcObject = null;
-        video.style.display = "none";
-        captureBtn.style.display = "none";
-    }
+            function startFakeProgress() {
+                const container = document.getElementById("progressContainer");
+                const bar = document.getElementById("progressBar");
 
-    function capturePhoto() {
-        const video = document.getElementById("camera");
-        const canvas = document.getElementById("canvas");
+                container.style.display = "block";
+                bar.style.width = "0%";
 
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+                let progress = 0;
 
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(video, 0, 0);
+                progressInterval = setInterval(() => {
+                    if (progress < 90) {
+                        progress += Math.random() * 10;
+                        bar.style.width = progress + "%";
+                    }
+                }, 300);
+            }
 
-        canvas.toBlob(function(blob) {
-            const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-            capturedImages.push(file);
-            renderPreview();
-        });
-    }
+            function completeProgress() {
+                const bar = document.getElementById("progressBar");
 
-    function handleFileSelect() {
-        const files = document.getElementById('fileInput').files;
+                clearInterval(progressInterval);
+                bar.style.width = "100%";
 
-        for (let i = 0; i < files.length; i++) {
-            capturedImages.push(files[i]);
-        }
+                setTimeout(() => {
+                    document.getElementById("progressContainer").style.display = "none";
+                }, 500);
+            }
 
-        renderPreview();
-    }
+            function capturePhoto() {
+                const video = document.getElementById("camera");
+                const canvas = document.getElementById("canvas");
 
-    function renderPreview() {
-        const container = document.getElementById('previewContainer');
-        container.innerHTML = "";
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
 
-        capturedImages.forEach((file, index) => {
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(video, 0, 0);
 
-            const wrapper = document.createElement("div");
-            wrapper.style.position = "relative";
+                canvas.toBlob(function(blob) {
+                    const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+                    capturedImages.push(file);
+                    renderPreview();
+                });
+            }
 
-            const img = document.createElement("img");
-            img.src = URL.createObjectURL(file);
+            function handleFileSelect() {
+                const files = document.getElementById('fileInput').files;
+                for (let i = 0; i < files.length; i++) {
+                    capturedImages.push(files[i]);
+                }
+                renderPreview();
+            }
 
-            const removeBtn = document.createElement("div");
-            removeBtn.innerHTML = "✕";
-            removeBtn.style.position = "absolute";
-            removeBtn.style.top = "4px";
-            removeBtn.style.right = "6px";
-            removeBtn.style.background = "rgba(0,0,0,0.6)";
-            removeBtn.style.color = "white";
-            removeBtn.style.borderRadius = "50%";
-            removeBtn.style.width = "20px";
-            removeBtn.style.height = "20px";
-            removeBtn.style.fontSize = "12px";
+            function renderPreview() {
+                const container = document.getElementById('previewContainer');
+                container.innerHTML = "";
 
-            removeBtn.style.display = "flex";
-            removeBtn.style.alignItems = "center";
-            removeBtn.style.justifyContent = "center";
-            removeBtn.style.cursor = "pointer";
+                capturedImages.forEach((file, index) => {
+                    const img = document.createElement("img");
+                    img.src = URL.createObjectURL(file);
+                    container.appendChild(img);
+                });
+            }
 
-            removeBtn.onclick = () => removeImage(index);
+            async function uploadAll() {
+                if (!capturedImages.length) {
+                    alert("Add images first");
+                    return;
+                }
 
-            wrapper.appendChild(img);
-            wrapper.appendChild(removeBtn);
+                stopCamera();
 
-            container.appendChild(wrapper);
-        });
-    }
+                document.getElementById("statusBox").innerText = "⏳ Extracting metadata...";
+                startFakeProgress();
 
-    function removeImage(index) {
-        capturedImages.splice(index, 1);
-        renderPreview();
-    }
+                const formData = new FormData();
+                capturedImages.forEach(file => formData.append("files", file));
 
-    async function uploadAll() {
+                const res = await fetch("/anklib/extract-multiple", {
+                    method: "POST",
+                    body: formData
+                });
 
-        if (!capturedImages.length) {
-            alert("Add images first");
-            return;
-        }
+                const data = await res.json();
 
-        // ✅ Stop camera when extracting
-        stopCamera();
+                completeProgress();
 
-        const formData = new FormData();
+                document.getElementById("statusBox").innerText = "✅ Extraction complete";
 
-        capturedImages.forEach(file => {
-            formData.append("files", file);
-        });
+                displayResult(data.data);
+            }
 
-        const res = await fetch("/anklib/extract-multiple", {
-            method: "POST",
-            body: formData
-        });
+            function displayResult(book) {
+                document.getElementById("resultBox").innerHTML = JSON.stringify(book, null, 2);
+                document.getElementById("confirmBtn").style.display = "block";
+                document.getElementById("resetBtn").style.display = "block";
+            }
 
-        const data = await res.json();
+            function resetApp() {
+                stopCamera();
+                capturedImages = [];
+                document.getElementById("previewContainer").innerHTML = "";
+                document.getElementById("resultBox").innerHTML = "";
+                document.getElementById("statusBox").innerText = "";
+                document.getElementById("confirmBtn").style.display = "none";
+                document.getElementById("resetBtn").style.display = "none";
+            }
 
-        const reused = data.images_reused || 0;
-        const total = data.images_processed || 0;
-        const newProcessed = total - reused;
-
-        let message = "";
-
-        if (reused > 0) {
-            message = `⚡ Reused ${reused} image(s), processed ${newProcessed} new image(s)`;
-        } else {
-            message = `Processed ${total} image(s)`;
-        }
-
-        document.getElementById("statusBox").innerText = message;
-
-        displayResult(data.data);
-    }
-
-    function displayResult(book) {
-
-        function field(label, value) {
-            return `
-                <div class="field-block">
-                    <div class="field-label">${label}</div>
-                    <input id="${label}" value="${value || ""}">
-                </div>
-            `;
-        }
-
-        let html = "";
-
-        html += field("Title", book.title);
-        html += field("Author", book.author);
-        html += field("Publisher", book.publisher);
-        html += field("ISBN", book.isbn);
-        html += field("Edition", book.edition);
-        html += field("Price", book.price);
-        html += field("Accession Number", book.accession_number);
-        html += field("Number of Pages", book.number_of_pages);
-
-        document.getElementById("resultBox").innerHTML = html;
-        document.getElementById("confirmBtn").style.display = "block";
-        document.getElementById("resetBtn").style.display = "block";
-    }
-
-    function collectData() {
-        return {
-            title: document.getElementById("Title")?.value,
-            author: document.getElementById("Author")?.value,
-            publisher: document.getElementById("Publisher")?.value,
-            isbn: document.getElementById("ISBN")?.value,
-            edition: document.getElementById("Edition")?.value,
-            price: document.getElementById("Price")?.value,
-            accession_number: document.getElementById("Accession Number")?.value,
-            number_of_pages: document.getElementById("Number of Pages")?.value
-        };
-    }
-
-    async function confirmData() {
-
-        const payload = collectData();
-
-        await fetch("/anklib/confirm", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(payload)
-        });
-
-        alert("✅ Saved successfully!");
-    }
-
-    function resetApp() {
-
-        // ✅ Stop camera when resetting
-        stopCamera();
-
-        capturedImages = [];
-
-        document.getElementById("previewContainer").innerHTML = "";
-        document.getElementById("resultBox").innerHTML = "";
-        document.getElementById("statusBox").innerText = "";
-
-        document.getElementById("confirmBtn").style.display = "none";
-        document.getElementById("resetBtn").style.display = "none";
-
-        document.getElementById("fileInput").value = "";
-    }
-
-</script>
+            async function confirmData() {
+                alert("Saved!");
+            }
+        </script>
     </body>
     </html>
     """
-
 
 if __name__ == "__main__":
     import uvicorn
