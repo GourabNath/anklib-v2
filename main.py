@@ -226,200 +226,224 @@ def ui():
 
         <script>
 
-            let stream;
-            let capturedImages = [];
+    let stream = null;
+    let capturedImages = [];
 
-            async function startCamera() {
-                const video = document.getElementById("camera");
-                const captureBtn = document.getElementById("captureBtn");
+    async function startCamera() {
+        const video = document.getElementById("camera");
+        const captureBtn = document.getElementById("captureBtn");
 
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" }
-                });
+        // ✅ Stop existing stream before starting new one
+        stopCamera();
 
-                video.srcObject = stream;
-                video.style.display = "block";
-                captureBtn.style.display = "block";
-            }
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" }
+        });
 
-            function capturePhoto() {
-                const video = document.getElementById("camera");
-                const canvas = document.getElementById("canvas");
+        video.srcObject = stream;
+        video.style.display = "block";
+        captureBtn.style.display = "block";
+    }
 
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
+    // ✅ NEW: Stop camera function
+    function stopCamera() {
+        const video = document.getElementById("camera");
+        const captureBtn = document.getElementById("captureBtn");
 
-                const ctx = canvas.getContext("2d");
-                ctx.drawImage(video, 0, 0);
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
 
-                canvas.toBlob(function(blob) {
-                    const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-                    capturedImages.push(file);
-                    renderPreview();
-                });
-            }
+        // Hide UI
+        video.srcObject = null;
+        video.style.display = "none";
+        captureBtn.style.display = "none";
+    }
 
-            function handleFileSelect() {
-                const files = document.getElementById('fileInput').files;
+    function capturePhoto() {
+        const video = document.getElementById("camera");
+        const canvas = document.getElementById("canvas");
 
-                for (let i = 0; i < files.length; i++) {
-                    capturedImages.push(files[i]);
-                }
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
 
-                renderPreview();
-            }
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0);
 
-            function renderPreview() {
-                const container = document.getElementById('previewContainer');
-                container.innerHTML = "";
+        canvas.toBlob(function(blob) {
+            const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+            capturedImages.push(file);
+            renderPreview();
+        });
+    }
 
-                capturedImages.forEach((file, index) => {
+    function handleFileSelect() {
+        const files = document.getElementById('fileInput').files;
 
-                    const wrapper = document.createElement("div");
-                    wrapper.style.position = "relative";
+        for (let i = 0; i < files.length; i++) {
+            capturedImages.push(files[i]);
+        }
 
-                    const img = document.createElement("img");
-                    img.src = URL.createObjectURL(file);
+        renderPreview();
+    }
 
-                    const removeBtn = document.createElement("div");
-                    removeBtn.innerHTML = "✕";
-                    removeBtn.style.position = "absolute";
-                    removeBtn.style.top = "4px";
-                    removeBtn.style.right = "6px";
-                    removeBtn.style.background = "rgba(0,0,0,0.6)";
-                    removeBtn.style.color = "white";
-                    removeBtn.style.borderRadius = "50%";
-                    removeBtn.style.width = "20px";
-                    removeBtn.style.height = "20px";
-                    removeBtn.style.fontSize = "12px";
+    function renderPreview() {
+        const container = document.getElementById('previewContainer');
+        container.innerHTML = "";
 
-                    removeBtn.style.display = "flex";
-                    removeBtn.style.alignItems = "center";
-                    removeBtn.style.justifyContent = "center";
-                    removeBtn.style.cursor = "pointer";
+        capturedImages.forEach((file, index) => {
 
-                    removeBtn.onclick = () => removeImage(index);
+            const wrapper = document.createElement("div");
+            wrapper.style.position = "relative";
 
-                    wrapper.appendChild(img);
-                    wrapper.appendChild(removeBtn);
+            const img = document.createElement("img");
+            img.src = URL.createObjectURL(file);
 
-                    container.appendChild(wrapper);
-                });
-            }
+            const removeBtn = document.createElement("div");
+            removeBtn.innerHTML = "✕";
+            removeBtn.style.position = "absolute";
+            removeBtn.style.top = "4px";
+            removeBtn.style.right = "6px";
+            removeBtn.style.background = "rgba(0,0,0,0.6)";
+            removeBtn.style.color = "white";
+            removeBtn.style.borderRadius = "50%";
+            removeBtn.style.width = "20px";
+            removeBtn.style.height = "20px";
+            removeBtn.style.fontSize = "12px";
 
-            function removeImage(index) {
-                capturedImages.splice(index, 1);
-                renderPreview();
-            }
+            removeBtn.style.display = "flex";
+            removeBtn.style.alignItems = "center";
+            removeBtn.style.justifyContent = "center";
+            removeBtn.style.cursor = "pointer";
 
-            async function uploadAll() {
+            removeBtn.onclick = () => removeImage(index);
 
-                if (!capturedImages.length) {
-                    alert("Add images first");
-                    return;
-                }
+            wrapper.appendChild(img);
+            wrapper.appendChild(removeBtn);
 
-                const formData = new FormData();
+            container.appendChild(wrapper);
+        });
+    }
 
-                capturedImages.forEach(file => {
-                    formData.append("files", file);
-                });
+    function removeImage(index) {
+        capturedImages.splice(index, 1);
+        renderPreview();
+    }
 
-                const res = await fetch("/anklib/extract-multiple", {
-                    method: "POST",
-                    body: formData
-                });
+    async function uploadAll() {
 
-                const data = await res.json();
+        if (!capturedImages.length) {
+            alert("Add images first");
+            return;
+        }
 
-                // ✅ NEW: show cache insight
-                const reused = data.images_reused || 0;
-                const total = data.images_processed || 0;
-                const newProcessed = total - reused;
+        // ✅ Stop camera when extracting
+        stopCamera();
 
-                let message = "";
+        const formData = new FormData();
 
-                if (reused > 0) {
-                    message = `⚡ Reused ${reused} image(s), processed ${newProcessed} new image(s)`;
-                } else {
-                    message = `Processed ${total} image(s)`;
-                }
+        capturedImages.forEach(file => {
+            formData.append("files", file);
+        });
 
-                document.getElementById("statusBox").innerText = message;
+        const res = await fetch("/anklib/extract-multiple", {
+            method: "POST",
+            body: formData
+        });
 
-                displayResult(data.data);
-            }
+        const data = await res.json();
 
-            function displayResult(book) {
+        const reused = data.images_reused || 0;
+        const total = data.images_processed || 0;
+        const newProcessed = total - reused;
 
-                function field(label, value) {
-                    return `
-                        <div class="field-block">
-                            <div class="field-label">${label}</div>
-                            <input id="${label}" value="${value || ""}">
-                        </div>
-                    `;
-                }
+        let message = "";
 
-                let html = "";
+        if (reused > 0) {
+            message = `⚡ Reused ${reused} image(s), processed ${newProcessed} new image(s)`;
+        } else {
+            message = `Processed ${total} image(s)`;
+        }
 
-                html += field("Title", book.title);
-                html += field("Author", book.author);
-                html += field("Publisher", book.publisher);
-                html += field("ISBN", book.isbn);
-                html += field("Edition", book.edition);
-                html += field("Price", book.price);
-                html += field("Accession Number", book.accession_number);
-                html += field("Number of Pages", book.number_of_pages);
+        document.getElementById("statusBox").innerText = message;
 
-                document.getElementById("resultBox").innerHTML = html;
-                document.getElementById("confirmBtn").style.display = "block";
-                document.getElementById("resetBtn").style.display = "block";
-            }
+        displayResult(data.data);
+    }
 
-            function collectData() {
-                return {
-                    title: document.getElementById("Title")?.value,
-                    author: document.getElementById("Author")?.value,
-                    publisher: document.getElementById("Publisher")?.value,
-                    isbn: document.getElementById("ISBN")?.value,
-                    edition: document.getElementById("Edition")?.value,
-                    price: document.getElementById("Price")?.value,
-                    accession_number: document.getElementById("Accession Number")?.value,
-                    number_of_pages: document.getElementById("Number of Pages")?.value
-                };
-            }
+    function displayResult(book) {
 
-            async function confirmData() {
+        function field(label, value) {
+            return `
+                <div class="field-block">
+                    <div class="field-label">${label}</div>
+                    <input id="${label}" value="${value || ""}">
+                </div>
+            `;
+        }
 
-                const payload = collectData();
+        let html = "";
 
-                await fetch("/anklib/confirm", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(payload)
-                });
+        html += field("Title", book.title);
+        html += field("Author", book.author);
+        html += field("Publisher", book.publisher);
+        html += field("ISBN", book.isbn);
+        html += field("Edition", book.edition);
+        html += field("Price", book.price);
+        html += field("Accession Number", book.accession_number);
+        html += field("Number of Pages", book.number_of_pages);
 
-                alert("✅ Saved successfully!");
-            }
+        document.getElementById("resultBox").innerHTML = html;
+        document.getElementById("confirmBtn").style.display = "block";
+        document.getElementById("resetBtn").style.display = "block";
+    }
 
-            function resetApp() {
+    function collectData() {
+        return {
+            title: document.getElementById("Title")?.value,
+            author: document.getElementById("Author")?.value,
+            publisher: document.getElementById("Publisher")?.value,
+            isbn: document.getElementById("ISBN")?.value,
+            edition: document.getElementById("Edition")?.value,
+            price: document.getElementById("Price")?.value,
+            accession_number: document.getElementById("Accession Number")?.value,
+            number_of_pages: document.getElementById("Number of Pages")?.value
+        };
+    }
 
-                capturedImages = [];
+    async function confirmData() {
 
-                document.getElementById("previewContainer").innerHTML = "";
-                document.getElementById("resultBox").innerHTML = "";
-                document.getElementById("statusBox").innerText = "";
+        const payload = collectData();
 
-                document.getElementById("confirmBtn").style.display = "none";
-                document.getElementById("resetBtn").style.display = "none";
+        await fetch("/anklib/confirm", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
 
-                document.getElementById("fileInput").value = "";
-            }
+        alert("✅ Saved successfully!");
+    }
 
-        </script>
+    function resetApp() {
+
+        // ✅ Stop camera when resetting
+        stopCamera();
+
+        capturedImages = [];
+
+        document.getElementById("previewContainer").innerHTML = "";
+        document.getElementById("resultBox").innerHTML = "";
+        document.getElementById("statusBox").innerText = "";
+
+        document.getElementById("confirmBtn").style.display = "none";
+        document.getElementById("resetBtn").style.display = "none";
+
+        document.getElementById("fileInput").value = "";
+    }
+
+</script>
     </body>
     </html>
     """
