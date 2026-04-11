@@ -241,7 +241,7 @@ def ui():
 
             <div id="resultBox" style="margin-top:20px;"></div>
 
-            <button id="confirmBtn" onclick="confirmData()" style="display:none;">
+            <button id="confirmBtn" style="display:none;">
                 Confirm & Save
             </button>
 
@@ -542,6 +542,8 @@ window.onload = function () {
         document.getElementById("userEmail").value = savedEmail;
     }
 };
+
+document.getElementById("confirmBtn").onclick = confirmData;
 
 </script>
     </body>
