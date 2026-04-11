@@ -486,6 +486,8 @@ function stopProgress() {
 
    async function confirmData() {
 
+    console.log("CONFIRM BUTTON CLICKED");
+
     // NEW: build payload with email
     const payload = {
         data: collectData(),
