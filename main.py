@@ -407,16 +407,7 @@ document.getElementById("resetBtn").style.display = "block";
     }
 
     const data = collectData();
-    data["user_email"] = email;
 
-    await fetch("/anklib/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-    });
-
-    alert("Saved to your sheet!");
-}
 
                 function collectData() {
     return {
