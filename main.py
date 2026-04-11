@@ -95,8 +95,18 @@ async def extract_multiple(files: List[UploadFile] = File(...)):
 # -------------------------------
 @app.post("/anklib/confirm")
 async def confirm(request: Request):
-    data = await request.json()
-    save_to_sheets(data)
+    payload = await request.json()
+
+    data = payload.get("data", {})
+    user_email = payload.get("user_email")
+
+    if not user_email:
+        return {"status": "error", "message": "user_email is required"}
+
+    user_email = user_email.strip().lower()  # NORMALIZE EMAIL
+
+    save_to_sheets(data, user_email)
+
     return {"status": "saved"}
 
 
@@ -190,6 +200,9 @@ def ui():
     <body>
         <div class="container">
             <h2>📚 Anklib</h2>
+
+            <input id="userEmail" placeholder="Enter your email"
+               style="margin-top:10px; padding:10px; width:100%; border-radius:8px; border:1px solid #ccc;" />
 
             <button onclick="startCamera()">📸 Open Camera</button>
 
@@ -471,20 +484,36 @@ function stopProgress() {
         };
     }
 
-    async function confirmData() {
+   async function confirmData() {
 
-        const payload = collectData();
+    // NEW: build payload with email
+    const payload = {
+        data: collectData(),
+        user_email: document.getElementById("userEmail").value
+    };
 
-        await fetch("/anklib/confirm", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(payload)
-        });
-
-        alert("✅ Saved successfully!");
+    // NEW: prevent empty email
+    if (!payload.user_email) {
+        alert("Please enter your email");
+        return;
     }
+
+	
+    // Save email locally
+    localStorage.setItem("anklib_user_email", payload.user_email);
+
+    // existing API call
+    await fetch("/anklib/confirm", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+    });
+
+    alert("✅ Saved successfully!");
+}
+
 
     function resetApp() {
 
@@ -502,6 +531,15 @@ function stopProgress() {
 
         document.getElementById("fileInput").value = "";
     }
+
+
+    // Load saved email on page load
+window.onload = function () {
+    const savedEmail = localStorage.getItem("anklib_user_email");
+    if (savedEmail) {
+        document.getElementById("userEmail").value = savedEmail;
+    }
+};
 
 </script>
     </body>
