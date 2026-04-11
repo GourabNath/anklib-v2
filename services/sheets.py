@@ -35,7 +35,17 @@ def load_user_map():
 
 def save_user_map(data):
     with open(USER_SHEET_MAP_FILE, "w") as f:
-        json.dump(data, f)
+        json.dump(data, f, indent=2)  # ✅ small improvement
+
+
+# -----------------------------
+# 🔍 ADDITION: FIND SHEET BY NAME
+# -----------------------------
+def find_sheet_by_name(user_email):
+    try:
+        return client.open(f"Library Metadata - {user_email}").sheet1
+    except:
+        return None
 
 
 # -----------------------------
@@ -47,7 +57,15 @@ def get_or_create_sheet(user_email):
     # 🔁 Reuse existing
     if user_email in user_map:
         sheet_id = user_map[user_email]
-        return client.open_by_key(sheet_id).sheet1
+        try:
+            return client.open_by_key(sheet_id).sheet1
+        except:
+            pass  # ✅ fallback below
+
+    # 🔍 ADDITION: Try recovering existing sheet (Render-safe)
+    existing_sheet = find_sheet_by_name(user_email)
+    if existing_sheet:
+        return existing_sheet
 
     # 🆕 Create new sheet
     spreadsheet = client.create(f"Library Metadata - {user_email}")
