@@ -4,7 +4,9 @@ from datetime import datetime
 import os
 import json
 
-# Define scope
+# -----------------------------
+# AUTH
+# -----------------------------
 scope = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/drive"
@@ -14,20 +16,71 @@ creds_dict = json.loads(os.getenv("GOOGLE_CREDS"))
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 
-sheet = client.open("anklib_data").sheet1
+# -----------------------------
+# CONFIG
+# -----------------------------
+FOLDER_ID = os.getenv("GOOGLE_FOLDER_ID")  # 👈 create folder + put ID in env
+USER_SHEET_MAP_FILE = "user_sheets.json"
 
 
-def save_to_sheets(data: dict):
-    """
-    Saves user-confirmed book metadata into Google Sheets
-    with clean formatting:
-    - Sentence case headers
-    - Bold header
-    - Frozen header row
-    - Auto column width
-    - Center-aligned numeric columns
-    - 🆕 Alternating row colors (zebra striping)
-    """
+# -----------------------------
+# LOAD / SAVE USER MAP
+# -----------------------------
+def load_user_map():
+    if os.path.exists(USER_SHEET_MAP_FILE):
+        with open(USER_SHEET_MAP_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+
+def save_user_map(data):
+    with open(USER_SHEET_MAP_FILE, "w") as f:
+        json.dump(data, f)
+
+
+# -----------------------------
+# GET OR CREATE SHEET
+# -----------------------------
+def get_or_create_sheet(user_email):
+    user_map = load_user_map()
+
+    # 🔁 Reuse existing
+    if user_email in user_map:
+        sheet_id = user_map[user_email]
+        return client.open_by_key(sheet_id).sheet1
+
+    # 🆕 Create new sheet
+    spreadsheet = client.create(f"Library Metadata - {user_email}")
+    sheet = spreadsheet.sheet1
+
+    sheet_id = spreadsheet.id
+
+    # 📁 Move to folder
+    if FOLDER_ID:
+        drive_service = client.auth.service
+        drive_service.files().update(
+            fileId=sheet_id,
+            addParents=FOLDER_ID,
+            removeParents='root',
+            fields='id, parents'
+        ).execute()
+
+    # 📤 Share with user
+    spreadsheet.share(user_email, perm_type='user', role='writer')
+
+    # 💾 Save mapping
+    user_map[user_email] = sheet_id
+    save_user_map(user_map)
+
+    return sheet
+
+
+# -----------------------------
+# SAVE DATA
+# -----------------------------
+def save_to_sheets(data: dict, user_email: str):
+
+    sheet = get_or_create_sheet(user_email)
 
     keys = [
         "timestamp",
@@ -41,7 +94,6 @@ def save_to_sheets(data: dict):
         "number_of_pages"
     ]
 
-    # Format headers → sentence case
     headers = [key.replace("_", " ").capitalize() for key in keys]
 
     existing_data = sheet.get_all_values()
@@ -51,15 +103,10 @@ def save_to_sheets(data: dict):
     elif existing_data[0] != headers:
         sheet.insert_row(headers, 1)
 
-    # FORMAT HEADER (bold)
-    sheet.format("1:1", {
-        "textFormat": {"bold": True}
-    })
-
-    # FREEZE HEADER ROW
+    # FORMAT HEADER
+    sheet.format("1:1", {"textFormat": {"bold": True}})
     sheet.freeze(rows=1)
 
-    # Row data
     row = [
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         data.get("title") or "",
@@ -74,59 +121,44 @@ def save_to_sheets(data: dict):
 
     sheet.append_row(row)
 
-    # AUTO RESIZE COLUMNS
+    # AUTO RESIZE
     sheet.columns_auto_resize(0, len(headers))
 
-    # CENTER ALIGN NUMERIC COLUMNS
+    # CENTER ALIGN NUMERIC
     sheet.format("G:G", {"horizontalAlignment": "CENTER"})
     sheet.format("I:I", {"horizontalAlignment": "CENTER"})
 
-    # 🆕 =========================
-    # 🆕 ZEBRA STRIPING (SAFE)
-    # 🆕 =========================
-
+    # ZEBRA STRIPING
     sheet_id = sheet._properties['sheetId']
+    metadata = sheet.spreadsheet.fetch_sheet_metadata()
 
-    # 🆕 Remove existing banding (prevents stacking issue)
-    existing_banding = sheet.spreadsheet.fetch_sheet_metadata()
     requests = []
 
-    for s in existing_banding.get("sheets", []):
+    for s in metadata.get("sheets", []):
         if s["properties"]["sheetId"] == sheet_id:
-            banded_ranges = s.get("bandedRanges", [])
-            for band in banded_ranges:
+            for band in s.get("bandedRanges", []):
                 requests.append({
                     "deleteBanding": {
                         "bandedRangeId": band["bandedRangeId"]
                     }
                 })
 
-    # 🆕 Add fresh banding
     requests.append({
         "addBanding": {
             "bandedRange": {
                 "range": {
                     "sheetId": sheet_id,
-                    "startRowIndex": 1,  # Skip header
+                    "startRowIndex": 1,
                     "startColumnIndex": 0,
                     "endColumnIndex": len(headers)
                 },
                 "rowProperties": {
-                    "firstBandColor": {
-                        "red": 1,
-                        "green": 1,
-                        "blue": 1
-                    },
-                    "secondBandColor": {
-                        "red": 0.85,
-                        "green": 0.92,
-                        "blue": 1
-                    }
+                    "firstBandColor": {"red": 1, "green": 1, "blue": 1},
+                    "secondBandColor": {"red": 0.85, "green": 0.92, "blue": 1}
                 }
             }
         }
     })
 
-    # 🆕 Apply batch update only if needed
     if requests:
         sheet.spreadsheet.batch_update({"requests": requests})
