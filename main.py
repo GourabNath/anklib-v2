@@ -90,29 +90,13 @@ async def extract_multiple(files: List[UploadFile] = File(...)):
     }
 
 
-@app.get("/anklib/get-sheet")
-def get_sheet(email: str):
-    from services.sheets import load_user_map
-
-    user_map = load_user_map()
-
-    if email in user_map:
-        sheet_id = user_map[email]
-        return {
-            "status": "found",
-            "url": f"https://docs.google.com/spreadsheets/d/{sheet_id}"
-        }
-
-    return {"status": "not_found"}
-
 # -------------------------------
 # CONFIRM
 # -------------------------------
 @app.post("/anklib/confirm")
 async def confirm(request: Request):
     data = await request.json()
-    user_email = data.get("user_email")
-    save_to_sheets(data, user_email)
+    save_to_sheets(data)
     return {"status": "saved"}
 
 
@@ -152,11 +136,6 @@ def ui():
                 width: 100%;
                 margin-top: 10px;
                 cursor: pointer;
-                font-size: 14px;
-            }
-
-            .secondary {
-                background: #555;
             }
 
             .upload-btn {
@@ -167,15 +146,6 @@ def ui():
                 border-radius: 8px;
                 cursor: pointer;
                 margin-top: 10px;
-            }
-
-            input {
-                width: 100%;
-                padding: 12px;
-                margin-top: 10px;
-                border-radius: 6px;
-                border: 1px solid #ccc;
-                font-size: 14px;
             }
 
             #previewContainer {
@@ -190,21 +160,41 @@ def ui():
                 border-radius: 6px;
             }
 
+            input {
+                width: 100%;
+                padding: 8px;
+                margin-top: 5px;
+                border-radius: 6px;
+                border: 1px solid #ccc;
+            }
+
+            .field-block {
+                margin-bottom: 15px;
+                text-align: left;
+            }
+
+            .field-label {
+                font-size: 12px;
+                color: #777;
+            }
+
             #statusBox {
                 margin-top: 15px;
                 font-size: 14px;
                 color: #555;
             }
 
-            #resultBox {
-                margin-top: 20px;
-                text-align: left;
-                font-size: 12px;
-                background: #fafafa;
-                padding: 10px;
-                border-radius: 6px;
-                white-space: pre-wrap;
-            }
+<div id="progressContainer" style="margin-top:10px; display:none;">
+    <div style="background:#ddd; border-radius:10px; overflow:hidden;">
+        <div id="progressBar" style="
+            height:10px;
+            width:0%;
+            background:#4CAF50;
+            transition: width 1s linear;
+        "></div>
+    </div>
+</div>
+
         </style>
     </head>
 
@@ -212,12 +202,6 @@ def ui():
         <div class="container">
             <h2>📚 Anklib</h2>
 
-            <!-- EMAIL -->
-            <input id="emailInput" type="email" placeholder="Enter your email" />
-
-            <button onclick="openSheet()">📄 Open My Sheet</button>
-
-            <!-- CAMERA -->
             <button onclick="startCamera()">📸 Open Camera</button>
 
             <video id="camera" autoplay playsinline style="display:none; width:100%; margin-top:10px;"></video>
@@ -227,244 +211,298 @@ def ui():
                 Capture Photo
             </button>
 
-            <!-- UPLOAD -->
-            <label for="fileInput" class="upload-btn">📁 Upload Images</label>
-            <input id="fileInput" type="file" accept="image/*" multiple onchange="handleFiles()" style="display:none;">
+            <label for="fileInput" class="upload-btn">
+                📁 Upload Images
+            </label>
+
+            <input id="fileInput" type="file" accept="image/*" multiple
+                   onchange="handleFileSelect()" style="display:none;">
 
             <div id="previewContainer"></div>
 
-            <button onclick="extractData()">Extract Metadata</button>
+            <button onclick="uploadAll()">Extract Metadata</button>
 
+            <!-- ✅ NEW STATUS BOX -->
             <div id="statusBox"></div>
 
-            <!-- PROGRESS -->
-            <div id="progressContainer" style="display:none; margin-top:10px;">
-                <div style="width:100%; background:#ddd; border-radius:6px;">
-                    <div id="progressBar" style="width:0%; height:10px; background:#4CAF50;"></div>
-                </div>
-            </div>
+            <div id="resultBox" style="margin-top:20px;"></div>
 
-            <div id="resultBox"></div>
-
-            <button id="confirmBtn" onclick="saveData()" style="display:none;">
+            <button id="confirmBtn" onclick="confirmData()" style="display:none;">
                 Confirm & Save
             </button>
 
-            <button id="resetBtn" onclick="resetApp()" class="secondary" style="display:none;">
+            <button id="resetBtn" onclick="resetApp()" style="display:none; background:#777;">
                 🔄 Scan Next Book
             </button>
         </div>
 
         <script>
-            let stream = null;
-            let images = [];
-            let progressTimer;
+	
+    let progressInterval = null;
+    let progressValue = 0;
+    let stream = null;
+    let capturedImages = [];
 
-            function stopCamera() {
-                if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
-                    stream = null;
-                }
-                document.getElementById("camera").style.display = "none";
-                document.getElementById("captureBtn").style.display = "none";
-            }
+    async function startCamera() {
+        const video = document.getElementById("camera");
+        const captureBtn = document.getElementById("captureBtn");
 
-            async function startCamera() {
-                stopCamera();
+        // ✅ Stop existing stream before starting new one
+        stopCamera();
 
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" }
-                });
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" }
+        });
 
-                const video = document.getElementById("camera");
-                video.srcObject = stream;
-                video.style.display = "block";
-                document.getElementById("captureBtn").style.display = "block";
-            }
+        video.srcObject = stream;
+        video.style.display = "block";
+        captureBtn.style.display = "block";
+    }
 
-            function capturePhoto() {
-                const video = document.getElementById("camera");
-                const canvas = document.getElementById("canvas");
+    // ✅ NEW: Stop camera function
+    function stopCamera() {
+        const video = document.getElementById("camera");
+        const captureBtn = document.getElementById("captureBtn");
 
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
 
-                const ctx = canvas.getContext("2d");
-                ctx.drawImage(video, 0, 0);
+        // Hide UI
+        video.srcObject = null;
+        video.style.display = "none";
+        captureBtn.style.display = "none";
+    }
 
-                canvas.toBlob(blob => {
-                    const file = new File([blob], "photo.jpg", { type: "image/jpeg" });
-                    images.push(file);
-                    renderPreview();
-                });
-            }
+    function capturePhoto() {
+        const video = document.getElementById("camera");
+        const canvas = document.getElementById("canvas");
 
-            function handleFiles() {
-                const files = document.getElementById("fileInput").files;
-                for (let i = 0; i < files.length; i++) {
-                    images.push(files[i]);
-                }
-                renderPreview();
-            }
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
 
-            function renderPreview() {
-                const container = document.getElementById("previewContainer");
-                container.innerHTML = "";
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0);
 
-                images.forEach(file => {
-                    const img = document.createElement("img");
-                    img.src = URL.createObjectURL(file);
-                    container.appendChild(img);
-                });
-            }
+        canvas.toBlob(function(blob) {
+            const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+            capturedImages.push(file);
+            renderPreview();
+        });
+    }
 
-            function startProgress() {
-                const bar = document.getElementById("progressBar");
-                document.getElementById("progressContainer").style.display = "block";
+    function handleFileSelect() {
+        const files = document.getElementById('fileInput').files;
 
-                let progress = 0;
+        for (let i = 0; i < files.length; i++) {
+            capturedImages.push(files[i]);
+        }
 
-                progressTimer = setInterval(() => {
-                    if (progress < 90) {
-                        progress += Math.random() * 10;
-                        bar.style.width = progress + "%";
-                    }
-                }, 300);
-            }
+        renderPreview();
+    }
 
-            function stopProgress() {
-                clearInterval(progressTimer);
-                document.getElementById("progressBar").style.width = "100%";
+    function renderPreview() {
+        const container = document.getElementById('previewContainer');
+        container.innerHTML = "";
 
-                setTimeout(() => {
-                    document.getElementById("progressContainer").style.display = "none";
-                }, 500);
-            }
+        capturedImages.forEach((file, index) => {
 
-            async function extractData() {
-                if (!images.length) {
-                    alert("Add images first");
-                    return;
-                }
+            const wrapper = document.createElement("div");
+            wrapper.style.position = "relative";
 
-                stopCamera();
-                startProgress();
+            const img = document.createElement("img");
+            img.src = URL.createObjectURL(file);
 
-                document.getElementById("statusBox").innerText = "Extracting...";
+            const removeBtn = document.createElement("div");
+            removeBtn.innerHTML = "✕";
+            removeBtn.style.position = "absolute";
+            removeBtn.style.top = "4px";
+            removeBtn.style.right = "6px";
+            removeBtn.style.background = "rgba(0,0,0,0.6)";
+            removeBtn.style.color = "white";
+            removeBtn.style.borderRadius = "50%";
+            removeBtn.style.width = "20px";
+            removeBtn.style.height = "20px";
+            removeBtn.style.fontSize = "12px";
 
-                const formData = new FormData();
-                images.forEach(f => formData.append("files", f));
+            removeBtn.style.display = "flex";
+            removeBtn.style.alignItems = "center";
+            removeBtn.style.justifyContent = "center";
+            removeBtn.style.cursor = "pointer";
 
-                const res = await fetch("/anklib/extract-multiple", {
-                    method: "POST",
-                    body: formData
-                });
+            removeBtn.onclick = () => removeImage(index);
 
-                const data = await res.json();
+            wrapper.appendChild(img);
+            wrapper.appendChild(removeBtn);
 
-                stopProgress();
+            container.appendChild(wrapper);
+        });
+    }
 
-                document.getElementById("statusBox").innerText = "Done";
+    function removeImage(index) {
+        capturedImages.splice(index, 1);
+        renderPreview();
+    }
 
-                const book = data.data;
 
-function field(label, value) {
-    return `
-        <div class="field-block">
-            <div class="field-label">${label}</div>
-            <input id="${label}" value="${value || ""}">
-        </div>
-    `;
+// ✅ [NEW] Progress bar
+function startProgress() {
+    const bar = document.getElementById("progressBar");
+    const container = document.getElementById("progressContainer");
+
+    progressValue = 0;
+    bar.style.width = "0%";
+    container.style.display = "block";
+
+    progressInterval = setInterval(() => {
+        progressValue += 25; // 4 steps → matches your design
+
+        if (progressValue > 100) progressValue = 100;
+
+        bar.style.width = progressValue + "%";
+
+    }, 1000);
 }
 
-let html = "";
+function stopProgress() {
+    clearInterval(progressInterval);
+    document.getElementById("progressBar").style.width = "100%";
 
-html += field("Title", book.title);
-html += field("Author", book.author);
-html += field("Publisher", book.publisher);
-html += field("ISBN", book.isbn);
-html += field("Edition", book.edition);
-html += field("Price", book.price);
+    setTimeout(() => {
+        document.getElementById("progressContainer").style.display = "none";
+    }, 500);
+}
 
-// NEW FIELDS
-html += field("Accession Number", book.accession_number);
-html += field("Number of Pages", book.number_of_pages);
+    
+    async function uploadAll() {
 
-document.getElementById("resultBox").innerHTML = html;
-document.getElementById("confirmBtn").style.display = "block";
-document.getElementById("resetBtn").style.display = "block";	
-
-                document.getElementById("confirmBtn").style.display = "block";
-                document.getElementById("resetBtn").style.display = "block";
-            }
-
-            async function saveData() {
-    const email = document.getElementById("emailInput").value;
-
-    if (!email) {
-        alert("Enter your email first");
+    if (!capturedImages.length) {
+        alert("Add images first");
         return;
     }
 
-    const data = collectData();
+    // ✅ Stop camera when extracting
+    stopCamera();
 
+    startProgress(); // 👉 start here
 
-                function collectData() {
-    return {
-        title: document.getElementById("Title")?.value,
-        author: document.getElementById("Author")?.value,
-        publisher: document.getElementById("Publisher")?.value,
-        isbn: document.getElementById("ISBN")?.value,
-        edition: document.getElementById("Edition")?.value,
-        price: document.getElementById("Price")?.value,
-        accession_number: document.getElementById("Accession Number")?.value,
-        number_of_pages: document.getElementById("Number of Pages")?.value
-    };
+    try {
+        const formData = new FormData();
+
+        capturedImages.forEach(file => {
+            formData.append("files", file);
+        });
+
+        const res = await fetch("/anklib/extract-multiple", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await res.json();
+
+        const reused = data.images_reused || 0;
+        const total = data.images_processed || 0;
+        const newProcessed = total - reused;
+
+        let message = "";
+
+        if (reused > 0) {
+            message = `⚡ Reused ${reused} image(s), processed ${newProcessed} new image(s)`;
+        } else {
+            message = `Processed ${total} image(s)`;
+        }
+
+        document.getElementById("statusBox").innerText = message;
+
+        displayResult(data.data);
+
+    } catch (err) {
+        console.error(err);
+        document.getElementById("statusBox").innerText = "❌ Something went wrong";
+    } finally {
+        stopProgress(); // 👉 ALWAYS stops (success or error)
+    }
 }
 
 
-                data["user_email"] = email;
+    function displayResult(book) {
 
-                await fetch("/anklib/confirm", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(data)
-                });
+        function field(label, value) {
+            return `
+                <div class="field-block">
+                    <div class="field-label">${label}</div>
+                    <input id="${label}" value="${value || ""}">
+                </div>
+            `;
+        }
 
-                alert("Saved to your sheet!");
-            }
+        let html = "";
 
-            async function openSheet() {
-                const email = document.getElementById("emailInput").value;
+        html += field("Title", book.title);
+        html += field("Author", book.author);
+        html += field("Publisher", book.publisher);
+        html += field("ISBN", book.isbn);
+        html += field("Edition", book.edition);
+        html += field("Price", book.price);
+        html += field("Accession Number", book.accession_number);
+        html += field("Number of Pages", book.number_of_pages);
 
-                if (!email) {
-                    alert("Enter your email first");
-                    return;
-                }
+        document.getElementById("resultBox").innerHTML = html;
+        document.getElementById("confirmBtn").style.display = "block";
+        document.getElementById("resetBtn").style.display = "block";
+    }
 
-                const res = await fetch(`/anklib/get-sheet?email=${email}`);
-                const data = await res.json();
+    function collectData() {
+        return {
+            title: document.getElementById("Title")?.value,
+            author: document.getElementById("Author")?.value,
+            publisher: document.getElementById("Publisher")?.value,
+            isbn: document.getElementById("ISBN")?.value,
+            edition: document.getElementById("Edition")?.value,
+            price: document.getElementById("Price")?.value,
+            accession_number: document.getElementById("Accession Number")?.value,
+            number_of_pages: document.getElementById("Number of Pages")?.value
+        };
+    }
 
-                if (data.status === "found") {
-                    window.open(data.url, "_blank");
-                } else {
-                    alert("No sheet yet. Save once to create it.");
-                }
-            }
+    async function confirmData() {
 
-            function resetApp() {
-                stopCamera();
-                images = [];
-                document.getElementById("previewContainer").innerHTML = "";
-                document.getElementById("resultBox").innerText = "";
-                document.getElementById("statusBox").innerText = "";
-                document.getElementById("confirmBtn").style.display = "none";
-                document.getElementById("resetBtn").style.display = "none";
-            }
-        </script>
+        const payload = collectData();
+
+        await fetch("/anklib/confirm", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        alert("✅ Saved successfully!");
+    }
+
+    function resetApp() {
+
+        // ✅ Stop camera when resetting
+        stopCamera();
+
+        capturedImages = [];
+
+        document.getElementById("previewContainer").innerHTML = "";
+        document.getElementById("resultBox").innerHTML = "";
+        document.getElementById("statusBox").innerText = "";
+
+        document.getElementById("confirmBtn").style.display = "none";
+        document.getElementById("resetBtn").style.display = "none";
+
+        document.getElementById("fileInput").value = "";
+    }
+
+</script>
     </body>
     </html>
     """
+
 
 if __name__ == "__main__":
     import uvicorn
