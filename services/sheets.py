@@ -68,9 +68,10 @@ def get_or_create_sheet(user_email):
         return existing_sheet
 
     # 🆕 Create new sheet
+    print("Creating sheet for:", user_email)
     spreadsheet = client.create(f"Library Metadata - {user_email}")
     sheet = spreadsheet.sheet1
-
+    print("Sheet created with ID:", spreadsheet.id)
     sheet_id = spreadsheet.id
 
     # 📁 Move to folder
