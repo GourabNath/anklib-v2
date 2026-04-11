@@ -107,7 +107,9 @@ async def confirm(request: Request):
 
     save_to_sheets(data, user_email)
 
-    print("CONFIRM API HIT", flush=True)
+    import sys
+    print("CONFIRM API HIT")
+    sys.stdout.flush()
 
     return {"status": "saved"}
 
