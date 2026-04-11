@@ -111,7 +111,10 @@ async def confirm(request: Request):
     print("CONFIRM API HIT")
     sys.stdout.flush()
 
-    return {"status": "saved"}
+    return {
+    "status": "saved",
+    "debug": "API HIT"
+}
 
 
 # -------------------------------
@@ -517,7 +520,9 @@ function stopProgress() {
         body: JSON.stringify(payload)
     });
 
-    alert("✅ Saved successfully!");
+    const res = await fetch(...);
+    const data = await res.json();
+    alert(data.debug || "No debug");
 }
 
 
