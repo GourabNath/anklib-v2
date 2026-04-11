@@ -366,22 +366,72 @@ def ui():
 
                 document.getElementById("statusBox").innerText = "Done";
 
-                document.getElementById("resultBox").innerText =
-                    JSON.stringify(data.data, null, 2);
+                const book = data.data;
+
+function field(label, value) {
+    return `
+        <div class="field-block">
+            <div class="field-label">${label}</div>
+            <input id="${label}" value="${value || ""}">
+        </div>
+    `;
+}
+
+let html = "";
+
+html += field("Title", book.title);
+html += field("Author", book.author);
+html += field("Publisher", book.publisher);
+html += field("ISBN", book.isbn);
+html += field("Edition", book.edition);
+html += field("Price", book.price);
+
+// NEW FIELDS
+html += field("Accession Number", book.accession_number);
+html += field("Number of Pages", book.number_of_pages);
+
+document.getElementById("resultBox").innerHTML = html;
+document.getElementById("confirmBtn").style.display = "block";
+document.getElementById("resetBtn").style.display = "block";	
 
                 document.getElementById("confirmBtn").style.display = "block";
                 document.getElementById("resetBtn").style.display = "block";
             }
 
             async function saveData() {
-                const email = document.getElementById("emailInput").value;
+    const email = document.getElementById("emailInput").value;
 
-                if (!email) {
-                    alert("Enter your email first");
-                    return;
-                }
+    if (!email) {
+        alert("Enter your email first");
+        return;
+    }
 
-                const data = JSON.parse(document.getElementById("resultBox").innerText);
+    const data = collectData();
+    data["user_email"] = email;
+
+    await fetch("/anklib/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+    });
+
+    alert("Saved to your sheet!");
+}
+
+                function collectData() {
+    return {
+        title: document.getElementById("Title")?.value,
+        author: document.getElementById("Author")?.value,
+        publisher: document.getElementById("Publisher")?.value,
+        isbn: document.getElementById("ISBN")?.value,
+        edition: document.getElementById("Edition")?.value,
+        price: document.getElementById("Price")?.value,
+        accession_number: document.getElementById("Accession Number")?.value,
+        number_of_pages: document.getElementById("Number of Pages")?.value
+    };
+}
+
+
                 data["user_email"] = email;
 
                 await fetch("/anklib/confirm", {
