@@ -507,6 +507,8 @@ function stopProgress() {
 
     localStorage.setItem("anklib_user_email", payload.user_email);
 
+    console.log("CALLING API...");
+
     const res = await fetch("/anklib/confirm", {
         method: "POST",
         headers: {
@@ -514,6 +516,8 @@ function stopProgress() {
         },
         body: JSON.stringify(payload)
     });
+
+    console.log("RESPONSE RECEIVED");
 
     const data = await res.json();
     alert(data.debug || "Saved successfully!");
