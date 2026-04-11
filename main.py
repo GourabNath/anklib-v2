@@ -357,24 +357,28 @@ function startProgress() {
     container.style.display = "block";
 
     progressInterval = setInterval(() => {
-        progressValue += 25; // 4 steps → matches your design
-
-        if (progressValue > 100) progressValue = 100;
-
-        bar.style.width = progressValue + "%";
-
-    }, 1000);
-}
-
-function stopProgress() {
-    clearInterval(progressInterval);
-    document.getElementById("progressBar").style.width = "100%";
-
-    setTimeout(() => {
-        document.getElementById("progressContainer").style.display = "none";
+        // Slow, asymptotic progress
+        if (progressValue < 90) {
+            progressValue += Math.random() * 10; // random small increments
+            if (progressValue > 90) progressValue = 90;
+            bar.style.width = progressValue + "%";
+        }
     }, 500);
 }
 
+
+function stopProgress() {
+    clearInterval(progressInterval);
+
+    const bar = document.getElementById("progressBar");
+
+    // Jump to 100% only when done
+    bar.style.width = "100%";
+
+    setTimeout(() => {
+        document.getElementById("progressContainer").style.display = "none";
+    }, 400);
+}
     
     async function uploadAll() {
 
