@@ -495,24 +495,19 @@ function stopProgress() {
 
     console.log("CONFIRM BUTTON CLICKED");
 
-    // NEW: build payload with email
     const payload = {
         data: collectData(),
         user_email: document.getElementById("userEmail").value
     };
 
-    // NEW: prevent empty email
     if (!payload.user_email) {
         alert("Please enter your email");
         return;
     }
 
-	
-    // Save email locally
     localStorage.setItem("anklib_user_email", payload.user_email);
 
-    // existing API call
-    await fetch("/anklib/confirm", {
+    const res = await fetch("/anklib/confirm", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
@@ -520,9 +515,8 @@ function stopProgress() {
         body: JSON.stringify(payload)
     });
 
-    const res = await fetch(...);
     const data = await res.json();
-    alert(data.debug || "No debug");
+    alert(data.debug || "Saved successfully!");
 }
 
 
