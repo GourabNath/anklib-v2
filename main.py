@@ -184,17 +184,6 @@ def ui():
                 color: #555;
             }
 
-<div id="progressContainer" style="margin-top:10px; display:none;">
-    <div style="background:#ddd; border-radius:10px; overflow:hidden;">
-        <div id="progressBar" style="
-            height:10px;
-            width:0%;
-            background:#4CAF50;
-            transition: width 1s linear;
-        "></div>
-    </div>
-</div>
-
         </style>
     </head>
 
@@ -224,6 +213,18 @@ def ui():
 
             <!-- ✅ NEW STATUS BOX -->
             <div id="statusBox"></div>
+
+
+            <div id="progressContainer" style="margin-top:10px; display:none;">
+                <div style="background:#ddd; border-radius:10px; overflow:hidden;">
+                    <div id="progressBar" style="
+                        height:10px;
+                        width:0%;
+                        background:#4CAF50;
+                        transition: width 1s linear;
+                    "></div>
+                </div>
+            </div>
 
             <div id="resultBox" style="margin-top:20px;"></div>
 
