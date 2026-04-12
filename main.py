@@ -248,7 +248,7 @@ def ui():
 
             <div id="resultBox" style="margin-top:20px;"></div>
 
-            <button id="confirmBtn" style="display:none;">
+            <button id="confirmBtn" onclick="confirmData()" style="display:none;">
                 Confirm & Save
             </button>
 
@@ -548,9 +548,6 @@ window.onload = function () {
     if (savedEmail) {
         document.getElementById("userEmail").value = savedEmail;
     }
-
-    // FIX: bind confirm button after DOM is loaded
-    document.getElementById("confirmBtn").onclick = confirmData;
 };
 
 </script>
