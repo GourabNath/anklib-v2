@@ -543,12 +543,12 @@ function stopProgress() {
 
 
     // Load saved email on page load
-window.onload = function () {
+document.addEventListener("DOMContentLoaded", function () {
     const savedEmail = localStorage.getItem("anklib_user_email");
     if (savedEmail) {
         document.getElementById("userEmail").value = savedEmail;
     }
-};
+});
 
 </script>
     </body>
