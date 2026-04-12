@@ -4,7 +4,7 @@ from datetime import datetime
 import os
 import json
 
-print("GOOGLE_CREDS RAW:", os.getenv("GOOGLE_CREDS"), flush=True)
+print("GOOGLE_CREDS PRESENT:", os.getenv("GOOGLE_CREDS") is not None, flush=True)
 
 # -----------------------------
 # AUTH
