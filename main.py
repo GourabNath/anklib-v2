@@ -113,7 +113,7 @@ async def confirm(request: Request):
             print("ERROR IN SHEETS:", str(e), flush=True)
 
     import threading
-    threading.Thread(target=safe_save, args=(data, user_email)).start()
+    safe_save(data, user_email)
 
     import sys
     print("CONFIRM API HIT")
