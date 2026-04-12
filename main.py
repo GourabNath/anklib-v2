@@ -106,7 +106,14 @@ async def confirm(request: Request):
     user_email = user_email.strip().lower()  # NORMALIZE EMAIL
 
     import threading
-    threading.Thread(target=save_to_sheets, args=(data, user_email)).start()
+    def safe_save(data, user_email):
+    try:
+        save_to_sheets(data, user_email)
+    except Exception as e:
+        print("ERROR IN SHEETS:", str(e), flush=True)
+
+    import threading
+    threading.Thread(target=safe_save, args=(data, user_email)).start()
 
     import sys
     print("CONFIRM API HIT")
