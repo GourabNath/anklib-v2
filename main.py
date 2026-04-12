@@ -550,6 +550,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 });
 
+window.confirmData = confirmData;
+
 </script>
     </body>
     </html>
