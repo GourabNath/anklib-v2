@@ -548,6 +548,9 @@ window.onload = function () {
     if (savedEmail) {
         document.getElementById("userEmail").value = savedEmail;
     }
+
+    // FIX: bind confirm button after DOM is loaded
+    document.getElementById("confirmBtn").onclick = confirmData;
 };
 
 document.getElementById("confirmBtn").onclick = confirmData;
