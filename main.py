@@ -553,8 +553,6 @@ window.onload = function () {
     document.getElementById("confirmBtn").onclick = confirmData;
 };
 
-document.getElementById("confirmBtn").onclick = confirmData;
-
 </script>
     </body>
     </html>
